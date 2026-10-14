@@ -1902,7 +1902,14 @@ inline auto find_escape(const char* begin, const char* end)
     std::string s = fmt::format(FMT_STRING("{:d}"), "foo");
   \endrst
  */
-#define FMT_STRING(s) FMT_STRING_IMPL(s, fmt::detail::compile_string, )
+#if FMT_CLANG_VERSION >= 2000
+// Clang 20 and later reject the compile_string wrapper in a constant expression (each
+// evaluation of the literal inside the lambda is a different object). A plain literal still
+// gets the format string checked at compile time by basic_format_string.
+#  define FMT_STRING(s) s
+#else
+#  define FMT_STRING(s) FMT_STRING_IMPL(s, fmt::detail::compile_string, )
+#endif
 
 template <size_t width, typename Char, typename OutputIt>
 auto write_codepoint(OutputIt out, char prefix, uint32_t cp) -> OutputIt {
