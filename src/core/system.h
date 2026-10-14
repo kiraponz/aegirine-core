@@ -452,6 +452,26 @@ void InvalidateDisplay();
 //////////////////////////////////////////////////////////////////////////
 void CalculateRewindMemoryUsage(u32 num_saves, u32 resolution_scale, u64* ram_usage, u64* vram_usage);
 void ClearMemorySaveStates();
+
+/// A point in the rewind history.
+struct RewindPoint
+{
+  /// Frames run since it was saved.
+  u32 frames_ago;
+
+  /// A small picture of the frame it was saved on, if one could be taken.
+  RGBA8Image thumbnail;
+};
+
+/// Width of RewindPoint::thumbnail.
+static constexpr u32 REWIND_THUMBNAIL_SIZE = 160;
+
+/// The rewind history, newest first. CPU thread only.
+std::vector<RewindPoint> GetRewindPoints();
+
+/// Goes back to the point at [index] in GetRewindPoints(). The newer points are dropped; this one is kept, so it can
+/// be gone back to again. CPU thread only.
+bool LoadRewindPoint(u32 index);
 void SetRunaheadReplayFlag();
 
 /// Shared socket multiplexer, used by PINE/GDB/etc.

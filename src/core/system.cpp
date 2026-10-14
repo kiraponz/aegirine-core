@@ -130,6 +130,10 @@ struct MemorySaveState
 {
   std::unique_ptr<GPUTexture> vram_texture;
   DynamicHeapArray<u8> state_data;
+
+  // Rewind states only: the frame it was saved on, and a small picture of it.
+  u32 frame_number = 0;
+  RGBA8Image thumbnail;
 #ifdef PROFILE_MEMORY_SAVE_STATES
   size_t state_size;
 #endif
@@ -200,6 +204,7 @@ static bool LoadStateBufferFromFile(SaveStateBuffer* buffer, std::FILE* fp, Erro
 static bool ReadAndDecompressStateData(std::FILE* fp, std::span<u8> dst, u32 file_offset, u32 compressed_size,
                                        SAVE_STATE_HEADER::CompressionType method, Error* error);
 static bool SaveStateToBuffer(SaveStateBuffer* buffer, Error* error, u32 screenshot_size = 256);
+static void RenderStateScreenshot(u32 screenshot_size, RGBA8Image* image);
 static bool SaveStateBufferToFile(const SaveStateBuffer& buffer, std::FILE* fp, Error* error,
                                   SaveStateCompressionMode compression_mode);
 static u32 CompressAndWriteStateData(std::FILE* fp, std::span<const u8> src, SaveStateCompressionMode method,
@@ -2954,49 +2959,7 @@ bool System::SaveStateToBuffer(SaveStateBuffer* buffer, Error* error, u32 screen
 
   // save screenshot
   if (screenshot_size > 0)
-  {
-    // assume this size is the width
-    GSVector4i screenshot_display_rect, screenshot_draw_rect;
-    g_gpu->CalculateDrawRect(screenshot_size, screenshot_size, true, true, &screenshot_display_rect,
-                             &screenshot_draw_rect);
-
-    const u32 screenshot_width = static_cast<u32>(screenshot_display_rect.width());
-    const u32 screenshot_height = static_cast<u32>(screenshot_display_rect.height());
-    screenshot_draw_rect = screenshot_draw_rect.sub32(screenshot_display_rect.xyxy());
-    screenshot_display_rect = screenshot_display_rect.sub32(screenshot_display_rect.xyxy());
-    VERBOSE_LOG("Saving {}x{} screenshot for state", screenshot_width, screenshot_height);
-
-    std::vector<u32> screenshot_buffer;
-    u32 screenshot_stride;
-    GPUTexture::Format screenshot_format;
-    if (g_gpu->RenderScreenshotToBuffer(screenshot_width, screenshot_height, screenshot_display_rect,
-                                        screenshot_draw_rect, false, &screenshot_buffer, &screenshot_stride,
-                                        &screenshot_format) &&
-        GPUTexture::ConvertTextureDataToRGBA8(screenshot_width, screenshot_height, screenshot_buffer, screenshot_stride,
-                                              screenshot_format))
-    {
-      if (screenshot_stride != (screenshot_width * sizeof(u32)))
-      {
-        WARNING_LOG("Failed to save {}x{} screenshot for save state due to incorrect stride({})", screenshot_width,
-                    screenshot_height, screenshot_stride);
-      }
-      else
-      {
-        if (g_gpu_device->UsesLowerLeftOrigin())
-        {
-          GPUTexture::FlipTextureDataRGBA8(screenshot_width, screenshot_height,
-                                           reinterpret_cast<u8*>(screenshot_buffer.data()), screenshot_stride);
-        }
-
-        buffer->screenshot.SetPixels(screenshot_width, screenshot_height, std::move(screenshot_buffer));
-      }
-    }
-    else
-    {
-      WARNING_LOG("Failed to save {}x{} screenshot for save state due to render/conversion failure", screenshot_width,
-                  screenshot_height);
-    }
-  }
+    RenderStateScreenshot(screenshot_size, &buffer->screenshot);
 
   // write data
   if (buffer->state_data.empty())
@@ -3012,6 +2975,51 @@ bool System::SaveStateToBuffer(SaveStateBuffer* buffer, Error* error, u32 screen
 
   buffer->state_size = sw.GetPosition();
   return true;
+}
+
+void System::RenderStateScreenshot(u32 screenshot_size, RGBA8Image* image)
+{
+  // assume this size is the width
+  GSVector4i screenshot_display_rect, screenshot_draw_rect;
+  g_gpu->CalculateDrawRect(screenshot_size, screenshot_size, true, true, &screenshot_display_rect,
+                           &screenshot_draw_rect);
+
+  const u32 screenshot_width = static_cast<u32>(screenshot_display_rect.width());
+  const u32 screenshot_height = static_cast<u32>(screenshot_display_rect.height());
+  screenshot_draw_rect = screenshot_draw_rect.sub32(screenshot_display_rect.xyxy());
+  screenshot_display_rect = screenshot_display_rect.sub32(screenshot_display_rect.xyxy());
+  VERBOSE_LOG("Saving {}x{} screenshot for state", screenshot_width, screenshot_height);
+
+  std::vector<u32> screenshot_buffer;
+  u32 screenshot_stride;
+  GPUTexture::Format screenshot_format;
+  if (g_gpu->RenderScreenshotToBuffer(screenshot_width, screenshot_height, screenshot_display_rect,
+                                      screenshot_draw_rect, false, &screenshot_buffer, &screenshot_stride,
+                                      &screenshot_format) &&
+      GPUTexture::ConvertTextureDataToRGBA8(screenshot_width, screenshot_height, screenshot_buffer, screenshot_stride,
+                                            screenshot_format))
+  {
+    if (screenshot_stride != (screenshot_width * sizeof(u32)))
+    {
+      WARNING_LOG("Failed to save {}x{} screenshot for save state due to incorrect stride({})", screenshot_width,
+                  screenshot_height, screenshot_stride);
+    }
+    else
+    {
+      if (g_gpu_device->UsesLowerLeftOrigin())
+      {
+        GPUTexture::FlipTextureDataRGBA8(screenshot_width, screenshot_height,
+                                         reinterpret_cast<u8*>(screenshot_buffer.data()), screenshot_stride);
+      }
+
+      image->SetPixels(screenshot_width, screenshot_height, std::move(screenshot_buffer));
+    }
+  }
+  else
+  {
+    WARNING_LOG("Failed to save {}x{} screenshot for save state due to render/conversion failure", screenshot_width,
+                screenshot_height);
+  }
 }
 
 bool System::SaveStateBufferToFile(const SaveStateBuffer& buffer, std::FILE* fp, Error* error,
@@ -4700,6 +4708,11 @@ bool System::SaveRewindState()
   if (!SaveMemoryState(&mss))
     return false;
 
+  mss.frame_number = s_frame_number;
+  mss.thumbnail.Invalidate();
+  RenderStateScreenshot(REWIND_THUMBNAIL_SIZE, &mss.thumbnail);
+  g_gpu->RestoreDeviceContext();
+
   s_rewind_states.push_back(std::move(mss));
 
 #ifdef PROFILE_MEMORY_SAVE_STATES
@@ -4736,6 +4749,36 @@ bool System::LoadRewindState(u32 skip_saves /*= 0*/, bool consume_state /*=true 
   DEV_LOG("Rewind load took {:.4f} ms", load_timer.GetTimeMilliseconds());
 #endif
 
+  return true;
+}
+
+std::vector<System::RewindPoint> System::GetRewindPoints()
+{
+  std::vector<RewindPoint> points;
+  points.reserve(s_rewind_states.size());
+  for (auto it = s_rewind_states.rbegin(); it != s_rewind_states.rend(); ++it)
+  {
+    RewindPoint& point = points.emplace_back();
+    point.frames_ago = (s_frame_number > it->frame_number) ? (s_frame_number - it->frame_number) : 0;
+    point.thumbnail = it->thumbnail;
+  }
+  return points;
+}
+
+bool System::LoadRewindPoint(u32 index)
+{
+  if (!IsValid() || index >= s_rewind_states.size())
+    return false;
+
+  if (!LoadRewindState(index, false))
+    return false;
+
+  // The next point comes a whole interval from here.
+  if (s_rewind_save_counter >= 0)
+    s_rewind_save_counter = s_rewind_save_frequency;
+
+  ResetPerformanceCounters();
+  ResetThrottler();
   return true;
 }
 
