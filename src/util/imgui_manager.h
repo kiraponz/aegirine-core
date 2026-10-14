@@ -48,6 +48,21 @@ float GetWindowHeight();
 /// Updates internal state when the window is size.
 void WindowResized(float width, float height);
 
+/// The edges of the window the on-screen messages and overlays keep clear of (such as a display
+/// cutout), in window pixels.
+struct SafeAreaInsets
+{
+  float left, top, right, bottom;
+};
+
+/// The icon to draw for an ICON_EMOJI_ icon: itself, or a Font Awesome one where the emoji font
+/// cannot be drawn.
+const char* GetEmojiIcon(const char* icon);
+
+/// Sets the safe area. Call on the thread that renders.
+void SetSafeAreaInsets(const SafeAreaInsets& insets);
+const SafeAreaInsets& GetSafeAreaInsets();
+
 /// Updates scaling of the on-screen elements.
 void RequestScaleUpdate();
 

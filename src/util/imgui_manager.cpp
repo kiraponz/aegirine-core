@@ -17,6 +17,7 @@
 #include "common/string_util.h"
 #include "common/timer.h"
 
+#include "IconsEmoji.h"
 #include "IconsFontAwesome5.h"
 #include "fmt/format.h"
 #include "imgui.h"
@@ -26,10 +27,12 @@
 #include <atomic>
 #include <chrono>
 #include <cmath>
+#include <cstring>
 #include <deque>
 #include <mutex>
 #include <type_traits>
 #include <unordered_map>
+#include <utility>
 
 Log_SetChannel(ImGuiManager);
 
@@ -98,6 +101,7 @@ static DynamicHeapArray<u8> s_emoji_font_data;
 
 static float s_window_width;
 static float s_window_height;
+static SafeAreaInsets s_safe_area = {};
 static Common::Timer s_last_render_time;
 
 // cached copies of WantCaptureKeyboard/Mouse, used to know when to dispatch events
@@ -569,6 +573,7 @@ bool ImGuiManager::LoadFontData()
     s_icon_pf_font_data = std::move(font_data.value());
   }
 
+#ifdef IMGUI_ENABLE_FREETYPE_LUNASVG
   if (s_emoji_font_data.empty())
   {
     std::optional<DynamicHeapArray<u8>> font_data =
@@ -578,6 +583,7 @@ bool ImGuiManager::LoadFontData()
 
     s_emoji_font_data = std::move(font_data.value());
   }
+#endif
 
   return true;
 }
@@ -632,6 +638,7 @@ bool ImGuiManager::AddIconFonts(float size)
     }
   }
 
+#ifdef IMGUI_ENABLE_FREETYPE_LUNASVG
   {
     ImFontConfig cfg;
     cfg.MergeMode = true;
@@ -648,6 +655,7 @@ bool ImGuiManager::AddIconFonts(float size)
       return false;
     }
   }
+#endif
 
   return true;
 }
@@ -765,9 +773,40 @@ void Host::AddKeyedOSDMessage(std::string key, std::string message, float durati
   ImGuiManager::s_osd_posted_messages.push_back(std::move(msg));
 }
 
+const char* ImGuiManager::GetEmojiIcon(const char* icon)
+{
+#ifdef IMGUI_ENABLE_FREETYPE_LUNASVG
+  return icon;
+#else
+  // The emoji font needs SVG support, so draw the Font Awesome icon that looks most alike.
+  static constexpr std::pair<const char*, const char*> icons[] = {
+    {ICON_EMOJI_WARNING, ICON_FA_EXCLAMATION_TRIANGLE},
+    {ICON_EMOJI_INFORMATION, ICON_FA_INFO_CIRCLE},
+    {ICON_EMOJI_FAST_FORWARD, ICON_FA_FAST_FORWARD},
+    {ICON_EMOJI_FAST_REVERSE, ICON_FA_BACKWARD},
+    {ICON_EMOJI_PAUSE, ICON_FA_PAUSE},
+    {ICON_EMOJI_FLOPPY_DISK, ICON_FA_SAVE},
+    {ICON_EMOJI_OPEN_THE_FOLDER, ICON_FA_FOLDER_OPEN},
+    {ICON_EMOJI_CAMERA, ICON_FA_CAMERA},
+    {ICON_EMOJI_CAMERA_WITH_FLASH, ICON_FA_CAMERA},
+    {ICON_EMOJI_MUTED_SPEAKER, ICON_FA_VOLUME_MUTE},
+    {ICON_EMOJI_MEDIUM_VOLUME_SPEAKER, ICON_FA_VOLUME_DOWN},
+    {ICON_EMOJI_HIGH_VOLUME_SPEAKER, ICON_FA_VOLUME_UP},
+    {ICON_EMOJI_MAGNIFIYING_GLASS_TILTED_LEFT, ICON_FA_SEARCH},
+    {ICON_EMOJI_UNLOCKED, ICON_FA_UNLOCK},
+  };
+  for (const auto& [emoji, fa] : icons)
+  {
+    if (std::strcmp(icon, emoji) == 0)
+      return fa;
+  }
+  return icon;
+#endif
+}
+
 void Host::AddIconOSDMessage(std::string key, const char* icon, std::string message, float duration /* = 2.0f */)
 {
-  return AddKeyedOSDMessage(std::move(key), fmt::format("{}  {}", icon, message), duration);
+  return AddKeyedOSDMessage(std::move(key), fmt::format("{}  {}", ImGuiManager::GetEmojiIcon(icon), message), duration);
 }
 
 void Host::RemoveKeyedOSDMessage(std::string key)
@@ -843,9 +882,10 @@ void ImGuiManager::DrawOSDMessages(Common::Timer::Value current_time)
   const float margin = std::ceil(12.0f * scale);
   const float padding = std::ceil(10.0f * scale);
   const float rounding = std::ceil(6.0f * scale);
-  const float max_width = s_window_width - (margin + padding) * 2.0f;
-  float position_x = margin;
-  float position_y = margin;
+  const float max_width =
+    std::max(s_window_width - s_safe_area.left - s_safe_area.right - (margin + padding) * 2.0f, padding);
+  float position_x = s_safe_area.left + margin;
+  float position_y = s_safe_area.top + margin;
 
   auto iter = s_osd_active_messages.begin();
   while (iter != s_osd_active_messages.end())
@@ -923,6 +963,16 @@ void ImGuiManager::DrawOSDMessages(Common::Timer::Value current_time)
                 msg.text.c_str(), msg.text.c_str() + msg.text.length(), max_width, &text_rect);
     position_y += size.y + spacing;
   }
+}
+
+void ImGuiManager::SetSafeAreaInsets(const SafeAreaInsets& insets)
+{
+  s_safe_area = insets;
+}
+
+const ImGuiManager::SafeAreaInsets& ImGuiManager::GetSafeAreaInsets()
+{
+  return s_safe_area;
 }
 
 void ImGuiManager::RenderOSDMessages()

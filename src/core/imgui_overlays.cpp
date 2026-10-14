@@ -196,10 +196,12 @@ void ImGuiManager::RenderTextOverlays()
     const float scale = ImGuiManager::GetGlobalScale();
     const float margin = std::ceil(10.0f * scale);
     const float spacing = std::ceil(5.0f * scale);
-    float position_y = margin;
-    DrawPerformanceOverlay(position_y, scale, margin, spacing);
-    DrawFrameTimeOverlay(position_y, scale, margin, spacing);
-    DrawMediaCaptureOverlay(position_y, scale, margin, spacing);
+    const ImGuiManager::SafeAreaInsets& safe_area = ImGuiManager::GetSafeAreaInsets();
+    const float margin_right = margin + safe_area.right;
+    float position_y = safe_area.top + margin;
+    DrawPerformanceOverlay(position_y, scale, margin_right, spacing);
+    DrawFrameTimeOverlay(position_y, scale, margin_right, spacing);
+    DrawMediaCaptureOverlay(position_y, scale, margin_right, spacing);
 
     if (g_settings.display_show_enhancements && state != System::State::Paused)
       DrawEnhancementsOverlay();
@@ -390,7 +392,7 @@ void ImGuiManager::DrawPerformanceOverlay(float& position_y, float scale, float 
       const bool rewinding = System::IsRewinding();
       if (rewinding || System::IsFastForwardEnabled() || System::IsTurboEnabled())
       {
-        text.assign(rewinding ? ICON_EMOJI_FAST_REVERSE : ICON_EMOJI_FAST_FORWARD);
+        text.assign(GetEmojiIcon(rewinding ? ICON_EMOJI_FAST_REVERSE : ICON_EMOJI_FAST_FORWARD));
         DRAW_LINE(standard_font, text, IM_COL32(255, 255, 255, 255));
       }
     }
@@ -398,7 +400,7 @@ void ImGuiManager::DrawPerformanceOverlay(float& position_y, float scale, float 
   else if (g_settings.display_show_status_indicators && state == System::State::Paused &&
            !FullscreenUI::HasActiveWindow())
   {
-    text.assign(ICON_EMOJI_PAUSE);
+    text.assign(GetEmojiIcon(ICON_EMOJI_PAUSE));
     DRAW_LINE(standard_font, text, IM_COL32(255, 255, 255, 255));
   }
 
@@ -484,17 +486,19 @@ void ImGuiManager::DrawEnhancementsOverlay()
 
   const float scale = ImGuiManager::GetGlobalScale();
   const float shadow_offset = 1.0f * scale;
+  const ImGuiManager::SafeAreaInsets& safe_area = ImGuiManager::GetSafeAreaInsets();
   const float margin = 10.0f * scale;
+  const float margin_right = margin + safe_area.right;
   ImFont* font = ImGuiManager::GetFixedFont();
-  const float position_y = ImGui::GetIO().DisplaySize.y - margin - font->FontSize;
+  const float position_y = ImGui::GetIO().DisplaySize.y - safe_area.bottom - margin - font->FontSize;
 
   ImDrawList* dl = ImGui::GetBackgroundDrawList();
   ImVec2 text_size = font->CalcTextSizeA(font->FontSize, std::numeric_limits<float>::max(), -1.0f, text.c_str(),
                                          text.end_ptr(), nullptr);
   dl->AddText(font, font->FontSize,
-              ImVec2(ImGui::GetIO().DisplaySize.x - margin - text_size.x + shadow_offset, position_y + shadow_offset),
+              ImVec2(ImGui::GetIO().DisplaySize.x - margin_right - text_size.x + shadow_offset, position_y + shadow_offset),
               IM_COL32(0, 0, 0, 100), text.c_str(), text.end_ptr());
-  dl->AddText(font, font->FontSize, ImVec2(ImGui::GetIO().DisplaySize.x - margin - text_size.x, position_y),
+  dl->AddText(font, font->FontSize, ImVec2(ImGui::GetIO().DisplaySize.x - margin_right - text_size.x, position_y),
               IM_COL32(255, 255, 255, 255), text.c_str(), text.end_ptr());
 }
 
@@ -629,10 +633,13 @@ void ImGuiManager::DrawInputsOverlay()
       num_ports++;
   }
 
-  float current_x = margin;
-  float current_y = display_size.y - margin - ((static_cast<float>(num_ports) * (font->FontSize + spacing)) - spacing);
+  const ImGuiManager::SafeAreaInsets& safe_area = ImGuiManager::GetSafeAreaInsets();
+  float current_x = safe_area.left + margin;
+  float current_y = display_size.y - safe_area.bottom - margin -
+                    ((static_cast<float>(num_ports) * (font->FontSize + spacing)) - spacing);
 
-  const ImVec4 clip_rect(current_x, current_y, display_size.x - margin, display_size.y - margin);
+  const ImVec4 clip_rect(current_x, current_y, display_size.x - safe_area.right - margin,
+                         display_size.y - safe_area.bottom - margin);
 
   SmallString text;
 
