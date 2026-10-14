@@ -45,6 +45,44 @@
 
 Log_SetChannel(FileSystem);
 
+#ifndef _WIN32
+static FileSystem::VirtualFileProvider* s_virtual_file_provider = nullptr;
+
+void FileSystem::SetVirtualFileProvider(VirtualFileProvider* provider)
+{
+  s_virtual_file_provider = provider;
+}
+
+/// The provider for [path], or null for an ordinary path.
+static FileSystem::VirtualFileProvider* GetVirtualFileProvider(const char* path)
+{
+  FileSystem::VirtualFileProvider* provider = s_virtual_file_provider;
+  return (provider && path && provider->IsVirtualPath(path)) ? provider : nullptr;
+}
+
+static std::FILE* OpenVirtualCFile(FileSystem::VirtualFileProvider* provider, const char* filename, const char* mode,
+                                   Error* error)
+{
+  if (std::strpbrk(mode, "wa+"))
+  {
+    Error::SetErrno(error, EROFS);
+    return nullptr;
+  }
+
+  const int fd = provider->OpenFD(filename, error);
+  if (fd < 0)
+    return nullptr;
+
+  std::FILE* fp = fdopen(fd, mode);
+  if (!fp)
+  {
+    Error::SetErrno(error, errno);
+    close(fd);
+  }
+  return fp;
+}
+#endif
+
 
 #ifdef _WIN32
 static std::time_t ConvertFileTimeToUnixTime(const FILETIME& ft)
@@ -1006,6 +1044,9 @@ std::FILE* FileSystem::OpenCFile(const char* filename, const char* mode, Error* 
 
   return fp;
 #else
+  if (VirtualFileProvider* provider = GetVirtualFileProvider(filename))
+    return OpenVirtualCFile(provider, filename, mode, error);
+
   std::FILE* fp = std::fopen(filename, mode);
   if (!fp)
     Error::SetErrno(error, errno);
@@ -1113,6 +1154,16 @@ int FileSystem::OpenFDFile(const char* filename, int flags, int mode, Error* err
 
   return -1;
 #else
+  if (VirtualFileProvider* provider = GetVirtualFileProvider(filename))
+  {
+    if ((flags & (O_WRONLY | O_RDWR | O_CREAT | O_TRUNC)) != 0)
+    {
+      Error::SetErrno(error, EROFS);
+      return -1;
+    }
+    return provider->OpenFD(filename, error);
+  }
+
   const int fd = open(filename, flags, mode);
   if (fd < 0)
     Error::SetErrno(error, errno);
@@ -1153,6 +1204,9 @@ std::FILE* FileSystem::OpenSharedCFile(const char* filename, const char* mode, F
   Error::SetErrno(error, errno);
   return nullptr;
 #else
+  if (VirtualFileProvider* provider = GetVirtualFileProvider(filename))
+    return OpenVirtualCFile(provider, filename, mode, error);
+
   std::FILE* fp = std::fopen(filename, mode);
   if (!fp)
     Error::SetErrno(error, errno);
@@ -2322,6 +2376,38 @@ static u32 RecursiveFindFiles(const char* OriginPath, const char* ParentPath, co
   return nFiles;
 }
 
+static u32 FindVirtualFiles(FileSystem::VirtualFileProvider* provider, const char* path, const char* pattern,
+                            u32 flags, FileSystem::FindResultsArray* results)
+{
+  FileSystem::FindResultsArray entries;
+  if (!provider->ListDirectory(path, &entries))
+    return 0;
+
+  const bool match_all = (std::strcmp(pattern, "*") == 0 || std::strcmp(pattern, "*.*") == 0);
+  const bool has_wildcards = (std::strpbrk(pattern, "*?") != nullptr);
+  u32 count = 0;
+  for (FILESYSTEM_FIND_DATA& entry : entries)
+  {
+    const bool is_dir = (entry.Attributes & FILESYSTEM_FILE_ATTRIBUTE_DIRECTORY) != 0;
+    if (!(flags & (is_dir ? FILESYSTEM_FIND_FOLDERS : FILESYSTEM_FIND_FILES)))
+      continue;
+    if (!(flags & FILESYSTEM_FIND_HIDDEN_FILES) && entry.FileName.starts_with('.'))
+      continue;
+    if (!match_all && (has_wildcards ? !StringUtil::WildcardMatch(entry.FileName.c_str(), pattern) :
+                                       (entry.FileName != pattern)))
+    {
+      continue;
+    }
+
+    if (!(flags & FILESYSTEM_FIND_RELATIVE_PATHS))
+      entry.FileName = Path::Combine(path, entry.FileName);
+    results->push_back(std::move(entry));
+    count++;
+  }
+
+  return count;
+}
+
 bool FileSystem::FindFiles(const char* path, const char* pattern, u32 flags, FindResultsArray* results)
 {
   // clear result array
@@ -2337,9 +2423,16 @@ bool FileSystem::FindFiles(const char* path, const char* pattern, u32 flags, Fin
       visited.push_back(std::move(real_path));
   }
 
-  // enter the recursive function
-  if (RecursiveFindFiles(path, nullptr, nullptr, pattern, flags, results, visited) == 0)
+  if (VirtualFileProvider* provider = GetVirtualFileProvider(path))
+  {
+    // Only the directory itself: virtual directories are not searched recursively.
+    if (FindVirtualFiles(provider, path, pattern, flags, results) == 0)
+      return false;
+  }
+  else if (RecursiveFindFiles(path, nullptr, nullptr, pattern, flags, results, visited) == 0)
+  {
     return false;
+  }
 
   if (flags & FILESYSTEM_FIND_SORT_BY_NAME)
   {
@@ -2360,6 +2453,20 @@ bool FileSystem::FindFiles(const char* path, const char* pattern, u32 flags, Fin
 
 bool FileSystem::StatFile(const char* path, struct stat* st)
 {
+  if (VirtualFileProvider* provider = GetVirtualFileProvider(path))
+  {
+    FILESYSTEM_STAT_DATA sd;
+    if (!provider->StatFile(path, &sd))
+      return false;
+
+    *st = {};
+    st->st_mode = (sd.Attributes & FILESYSTEM_FILE_ATTRIBUTE_DIRECTORY) ? (S_IFDIR | 0555) : (S_IFREG | 0444);
+    st->st_size = sd.Size;
+    st->st_mtime = sd.ModificationTime;
+    st->st_ctime = sd.CreationTime;
+    return true;
+  }
+
   return stat(path, st) == 0;
 }
 
@@ -2374,6 +2481,9 @@ bool FileSystem::StatFile(std::FILE* fp, struct stat* st)
 
 bool FileSystem::StatFile(const char* path, FILESYSTEM_STAT_DATA* sd)
 {
+  if (VirtualFileProvider* provider = GetVirtualFileProvider(path))
+    return provider->StatFile(path, sd);
+
   // stat file
   struct stat sysStatData;
   if (stat(path, &sysStatData) < 0)
@@ -2411,6 +2521,12 @@ bool FileSystem::StatFile(std::FILE* fp, FILESYSTEM_STAT_DATA* sd)
 
 bool FileSystem::FileExists(const char* path)
 {
+  if (VirtualFileProvider* provider = GetVirtualFileProvider(path))
+  {
+    FILESYSTEM_STAT_DATA sd;
+    return provider->StatFile(path, &sd) && !(sd.Attributes & FILESYSTEM_FILE_ATTRIBUTE_DIRECTORY);
+  }
+
   struct stat sysStatData;
   if (stat(path, &sysStatData) < 0)
     return false;
@@ -2423,6 +2539,12 @@ bool FileSystem::FileExists(const char* path)
 
 bool FileSystem::DirectoryExists(const char* path)
 {
+  if (VirtualFileProvider* provider = GetVirtualFileProvider(path))
+  {
+    FILESYSTEM_STAT_DATA sd;
+    return provider->StatFile(path, &sd) && (sd.Attributes & FILESYSTEM_FILE_ATTRIBUTE_DIRECTORY);
+  }
+
   struct stat sysStatData;
   if (stat(path, &sysStatData) < 0)
     return false;

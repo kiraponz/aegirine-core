@@ -11,6 +11,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <sys/stat.h>
 #include <vector>
 
@@ -61,7 +62,32 @@ struct FILESYSTEM_FIND_DATA
 };
 
 namespace FileSystem {
+
 using FindResultsArray = std::vector<FILESYSTEM_FIND_DATA>;
+
+#ifndef _WIN32
+/// Files a frontend opens itself, such as Android's SAF documents, under a path prefix of its own.
+/// They are read-only: opening one for writing fails with EROFS.
+class VirtualFileProvider
+{
+public:
+  virtual ~VirtualFileProvider() = default;
+
+  /// True if [path] is one of this provider's.
+  virtual bool IsVirtualPath(std::string_view path) const = 0;
+
+  /// A new read-only descriptor for the file at [path], or -1 with [error] set.
+  virtual int OpenFD(const char* path, Error* error) = 0;
+
+  virtual bool StatFile(const char* path, FILESYSTEM_STAT_DATA* sd) = 0;
+
+  /// Adds the entries directly inside the directory [path] to [results], with the name alone in FileName.
+  virtual bool ListDirectory(const char* path, FindResultsArray* results) = 0;
+};
+
+/// Routes the paths [provider] claims to it, or none for null. Set it before anything opens such a path.
+void SetVirtualFileProvider(VirtualFileProvider* provider);
+#endif
 
 /// Returns the display name of a filename. Usually this is the same as the path.
 std::string GetDisplayNameFromPath(std::string_view path);
