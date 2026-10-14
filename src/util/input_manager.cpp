@@ -141,6 +141,7 @@ using BindingMap = std::unordered_multimap<InputBindingKey, std::shared_ptr<Inpu
 using VibrationBindingArray = std::vector<PadVibrationBinding>;
 static BindingMap s_binding_map;
 static VibrationBindingArray s_pad_vibration_array;
+static InputManager::PadVibrationCallback s_pad_vibration_callback = nullptr;
 static std::mutex s_binding_map_write_lock;
 
 // Hooks/intercepting (for setting bindings)
@@ -1549,6 +1550,9 @@ void InputManager::OnInputDeviceDisconnected(InputBindingKey key, std::string_vi
 void InputManager::SetPadVibrationIntensity(u32 pad_index, float large_or_single_motor_intensity,
                                             float small_motor_intensity)
 {
+  if (s_pad_vibration_callback)
+    s_pad_vibration_callback(pad_index, large_or_single_motor_intensity, small_motor_intensity);
+
   for (PadVibrationBinding& pad : s_pad_vibration_array)
   {
     if (pad.pad_index != pad_index)
@@ -1595,6 +1599,11 @@ void InputManager::SetPadVibrationIntensity(u32 pad_index, float large_or_single
     large_motor.last_intensity = large_or_single_motor_intensity;
     small_motor.last_intensity = small_motor_intensity;
   }
+}
+
+void InputManager::SetPadVibrationCallback(PadVibrationCallback callback)
+{
+  s_pad_vibration_callback = callback;
 }
 
 void InputManager::PauseVibration()

@@ -307,6 +307,12 @@ bool HasHook();
 /// Intensity is normalized from 0 to 1.
 void SetPadVibrationIntensity(u32 pad_index, float large_or_single_motor_intensity, float small_motor_intensity);
 
+/// Receives every pad's motor intensities as the pads set them, besides the bound sources. For a frontend
+/// that drives the host's motors itself. Called on the CPU thread.
+using PadVibrationCallback = void (*)(u32 pad_index, float large_or_single_motor_intensity,
+                                      float small_motor_intensity);
+void SetPadVibrationCallback(PadVibrationCallback callback);
+
 /// Zeros all vibration intensities. Call when pausing.
 /// The pad vibration state will internally remain, so that when emulation is unpaused, the effect resumes.
 void PauseVibration();

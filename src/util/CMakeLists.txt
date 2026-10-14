@@ -258,8 +258,10 @@ elseif(APPLE)
   set_source_files_properties(${MAC_SOURCES} PROPERTIES SKIP_PRECOMPILE_HEADERS TRUE)
 elseif(ANDROID)
   target_sources(util PRIVATE
+    aaudio_audio_stream.cpp
     platform_misc_android.cpp
   )
+  target_link_libraries(util PRIVATE aaudio)
 else()
   target_sources(util PRIVATE
     platform_misc_unix.cpp
