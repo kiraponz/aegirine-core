@@ -5,6 +5,8 @@
 # versions and checksums as build-dependencies-linux.sh, less lunasvg (its fork is gone, and
 # imgui only needs it for SVG fonts). The libraries are static, except
 # shaderc and SPIRV-Cross, which the core opens at runtime and which go in the APK.
+# The license of each goes in <output directory>/share/licenses/<name>.txt, for the app's
+# license screen.
 #
 # Syntax: build-dependencies-android.sh <android ndk> <output directory>
 
@@ -96,44 +98,69 @@ unpack() {
 	tar xf "$1"
 }
 
+# license <name> <files...>: the license texts of a library, one after another.
+license() {
+	local name="$1"
+	shift
+	mkdir -p "$INSTALLDIR/share/licenses"
+	local out="$INSTALLDIR/share/licenses/$name.txt"
+	: > "$out"
+	for f in "$@"; do
+		[ -s "$out" ] && printf '\n\n' >> "$out"
+		cat "$f" >> "$out"
+	done
+}
+
 echo "Building Zstandard..."
 unpack "zstd-$ZSTD.tar.gz" "zstd-$ZSTD"
+license zstd "zstd-$ZSTD/LICENSE"
 build "zstd-$ZSTD/build/cmake" -DZSTD_BUILD_SHARED=OFF -DZSTD_BUILD_STATIC=ON -DZSTD_BUILD_PROGRAMS=OFF -DZSTD_BUILD_TESTS=OFF
 
 echo "Building libpng..."
 unpack "libpng-$LIBPNG.tar.xz" "libpng-$LIBPNG"
+license libpng "libpng-$LIBPNG/LICENSE"
 build "libpng-$LIBPNG" -DPNG_TESTS=OFF -DPNG_STATIC=ON -DPNG_SHARED=OFF -DPNG_TOOLS=OFF -DPNG_ARM_NEON=on
 
 echo "Building libjpeg..."
 unpack "libjpeg-turbo-$LIBJPEGTURBO.tar.gz" "libjpeg-turbo-$LIBJPEGTURBO"
+license libjpeg-turbo "libjpeg-turbo-$LIBJPEGTURBO/LICENSE.md" "libjpeg-turbo-$LIBJPEGTURBO/README.ijg"
 build "libjpeg-turbo-$LIBJPEGTURBO" -DENABLE_STATIC=ON -DENABLE_SHARED=OFF -DWITH_TURBOJPEG=OFF
 
 echo "Building WebP..."
 unpack "libwebp-$LIBWEBP.tar.gz" "libwebp-$LIBWEBP"
+license libwebp "libwebp-$LIBWEBP/COPYING" "libwebp-$LIBWEBP/PATENTS"
 build "libwebp-$LIBWEBP" \
 	-DWEBP_BUILD_ANIM_UTILS=OFF -DWEBP_BUILD_CWEBP=OFF -DWEBP_BUILD_DWEBP=OFF -DWEBP_BUILD_GIF2WEBP=OFF -DWEBP_BUILD_IMG2WEBP=OFF \
 	-DWEBP_BUILD_VWEBP=OFF -DWEBP_BUILD_WEBPINFO=OFF -DWEBP_BUILD_WEBPMUX=OFF -DWEBP_BUILD_EXTRAS=OFF
 
 echo "Building FreeType..."
 unpack "freetype-$FREETYPE.tar.xz" "freetype-$FREETYPE"
+license freetype "freetype-$FREETYPE/LICENSE.TXT" "freetype-$FREETYPE/docs/FTL.TXT"
 build "freetype-$FREETYPE" -DFT_REQUIRE_ZLIB=ON -DFT_REQUIRE_PNG=ON -DFT_DISABLE_BZIP2=TRUE -DFT_DISABLE_BROTLI=TRUE -DFT_DISABLE_HARFBUZZ=TRUE
 
 echo "Building cpuinfo..."
 unpack "cpuinfo-$CPUINFO.tar.gz" "cpuinfo-$CPUINFO"
+license cpuinfo "cpuinfo-$CPUINFO/LICENSE"
 build "cpuinfo-$CPUINFO" -DCPUINFO_LIBRARY_TYPE=static -DCPUINFO_RUNTIME_TYPE=static -DCPUINFO_LOG_LEVEL=error \
 	-DCPUINFO_BUILD_TOOLS=OFF -DCPUINFO_BUILD_UNIT_TESTS=OFF -DCPUINFO_BUILD_MOCK_TESTS=OFF -DCPUINFO_BUILD_BENCHMARKS=OFF \
 	-DUSE_SYSTEM_LIBS=ON
 
 echo "Building soundtouch..."
 unpack "soundtouch-$SOUNDTOUCH.tar.gz" "soundtouch-$SOUNDTOUCH"
+license soundtouch "soundtouch-$SOUNDTOUCH"/COPYING*
 build "soundtouch-$SOUNDTOUCH"
 
 echo "Building shaderc..."
 unpack "shaderc-$SHADERC.tar.gz" "shaderc-$SHADERC"
+license shaderc "shaderc-$SHADERC/LICENSE"
+license glslang "shaderc-$SHADERC/third_party/glslang/LICENSE.txt"
+license spirv-tools "shaderc-$SHADERC/third_party/spirv-tools/LICENSE"
+license spirv-headers "shaderc-$SHADERC/third_party/spirv-headers/LICENSE"
 build "shaderc-$SHADERC" -DSHADERC_SKIP_TESTS=ON -DSHADERC_SKIP_EXAMPLES=ON -DSHADERC_SKIP_COPYRIGHT_CHECK=ON
 
 echo "Building SPIRV-Cross..."
 unpack "SPIRV-Cross-$SPIRV_CROSS.tar.gz" "SPIRV-Cross-$SPIRV_CROSS"
+license spirv-cross "SPIRV-Cross-$SPIRV_CROSS/LICENSE"
 build "SPIRV-Cross-$SPIRV_CROSS" -DSPIRV_CROSS_SHARED=ON -DSPIRV_CROSS_STATIC=OFF -DSPIRV_CROSS_CLI=OFF \
 	-DSPIRV_CROSS_ENABLE_TESTS=OFF -DSPIRV_CROSS_ENABLE_GLSL=ON -DSPIRV_CROSS_ENABLE_HLSL=OFF -DSPIRV_CROSS_ENABLE_MSL=OFF \
 	-DSPIRV_CROSS_ENABLE_CPP=OFF -DSPIRV_CROSS_ENABLE_REFLECT=OFF -DSPIRV_CROSS_ENABLE_C_API=ON -DSPIRV_CROSS_ENABLE_UTIL=ON

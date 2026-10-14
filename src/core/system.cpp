@@ -368,14 +368,15 @@ bool System::Internal::PerformEarlyHardwareChecks(Error* error)
   }
 #endif
 
-  // Check page size. If it doesn't match, it is a fatal error.
+  // Check page size. A build for larger pages also runs on smaller ones that divide them (the
+  // memory it maps and protects stays aligned), but not the other way round.
   const size_t runtime_host_page_size = PlatformMisc::GetRuntimePageSize();
   if (runtime_host_page_size == 0)
   {
     Error::SetStringFmt(error, "Cannot determine size of page. Continuing with expectation of {} byte pages.",
                         runtime_host_page_size);
   }
-  else if (HOST_PAGE_SIZE != runtime_host_page_size)
+  else if (runtime_host_page_size > HOST_PAGE_SIZE || (HOST_PAGE_SIZE % runtime_host_page_size) != 0)
   {
     Error::SetStringFmt(
       error, "Page size mismatch. This build was compiled with {} byte pages, but the system has {} byte pages.",
