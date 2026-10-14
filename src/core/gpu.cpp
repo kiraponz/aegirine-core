@@ -2471,7 +2471,8 @@ void GPU::CalculateDrawRect(s32 window_width, s32 window_height, bool apply_rota
 
       case DisplayAlignment::LeftOrTop:
       default:
-        top_padding = 0.0f;
+        top_padding = std::min<float>(static_cast<float>(g_settings.display_top_margin),
+                                      std::max<float>(static_cast<float>(window_height) - (display_height * scale), 0.0f));
         break;
     }
   }
