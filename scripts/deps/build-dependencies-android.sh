@@ -9,22 +9,34 @@
 # license screen.
 #
 # Syntax: build-dependencies-android.sh <android ndk> <output directory>
+#         build-dependencies-android.sh --fetch <directory>
+#
+# --fetch only downloads the source tarballs into <directory>. A build uses the tarballs in
+# <output directory>/deps-build when they are there and match, without the network.
 
 set -e
 
 if [ "$#" -ne 2 ]; then
 	echo "Syntax: $0 <android ndk> <output directory>"
+	echo "        $0 --fetch <directory>"
 	exit 1
 fi
 
-NDK="$1"
-INSTALLDIR="$2"
-if [ "${INSTALLDIR:0:1}" != "/" ]; then
-	INSTALLDIR="$PWD/$INSTALLDIR"
-fi
-if [ ! -f "$NDK/build/cmake/android.toolchain.cmake" ]; then
-	echo "Not an Android NDK: $NDK"
-	exit 1
+if [ "$1" = "--fetch" ]; then
+	FETCHONLY=1
+	DOWNLOADDIR="$2"
+else
+	FETCHONLY=
+	NDK="$1"
+	INSTALLDIR="$2"
+	if [ "${INSTALLDIR:0:1}" != "/" ]; then
+		INSTALLDIR="$PWD/$INSTALLDIR"
+	fi
+	if [ ! -f "$NDK/build/cmake/android.toolchain.cmake" ]; then
+		echo "Not an Android NDK: $NDK"
+		exit 1
+	fi
+	DOWNLOADDIR="$INSTALLDIR/deps-build"
 fi
 
 ABI=arm64-v8a
@@ -42,19 +54,8 @@ SHADERC=f60bb80e255144e71776e2ad570d89b78ea2ab4f
 SOUNDTOUCH=463ade388f3a51da078dc9ed062bf28e4ba29da7
 SPIRV_CROSS=vulkan-sdk-1.3.290.0
 
-mkdir -p "$INSTALLDIR/deps-build"
-cd "$INSTALLDIR/deps-build"
-
-curl -C - -L \
-	-o "cpuinfo-$CPUINFO.tar.gz" "https://github.com/stenzek/cpuinfo/archive/$CPUINFO.tar.gz" \
-	-o "shaderc-$SHADERC.tar.gz" "https://github.com/stenzek/shaderc/archive/$SHADERC.tar.gz" \
-	-o "soundtouch-$SOUNDTOUCH.tar.gz" "https://github.com/stenzek/soundtouch/archive/$SOUNDTOUCH.tar.gz" \
-	-o "SPIRV-Cross-$SPIRV_CROSS.tar.gz" "https://github.com/KhronosGroup/SPIRV-Cross/archive/refs/tags/$SPIRV_CROSS.tar.gz" \
-	-o "freetype-$FREETYPE.tar.xz" "https://sourceforge.net/projects/freetype/files/freetype2/$FREETYPE/freetype-$FREETYPE.tar.xz/download" \
-	-O "https://github.com/libjpeg-turbo/libjpeg-turbo/releases/download/$LIBJPEGTURBO/libjpeg-turbo-$LIBJPEGTURBO.tar.gz" \
-	-O "https://downloads.sourceforge.net/project/libpng/libpng16/$LIBPNG/libpng-$LIBPNG.tar.xz" \
-	-O "https://storage.googleapis.com/downloads.webmproject.org/releases/webp/libwebp-$LIBWEBP.tar.gz" \
-	-O "https://github.com/facebook/zstd/releases/download/v$ZSTD/zstd-$ZSTD.tar.gz"
+mkdir -p "$DOWNLOADDIR"
+cd "$DOWNLOADDIR"
 
 cat > SHASUMS <<EOF
 e1351218d270db49c3dddcba04fb2153b09731ea3fa6830e423f5952f44585be  cpuinfo-$CPUINFO.tar.gz
@@ -67,7 +68,22 @@ fe45c2af99f6102d2704277d392c1c83b55180a70bfd17fb888cc84a54b70573  soundtouch-$SO
 61f873ec69e3be1b99535634340d5bde750b2e4447caa1db9f61be3fd49ab1e5  libwebp-$LIBWEBP.tar.gz
 8c29e06cf42aacc1eafc4077ae2ec6c6fcb96a626157e0593d5e82a34fd403c1  zstd-$ZSTD.tar.gz
 EOF
+if ! shasum -a 256 --check --status SHASUMS 2>/dev/null; then
+	curl -C - -L \
+		-o "cpuinfo-$CPUINFO.tar.gz" "https://github.com/stenzek/cpuinfo/archive/$CPUINFO.tar.gz" \
+		-o "shaderc-$SHADERC.tar.gz" "https://github.com/stenzek/shaderc/archive/$SHADERC.tar.gz" \
+		-o "soundtouch-$SOUNDTOUCH.tar.gz" "https://github.com/stenzek/soundtouch/archive/$SOUNDTOUCH.tar.gz" \
+		-o "SPIRV-Cross-$SPIRV_CROSS.tar.gz" "https://github.com/KhronosGroup/SPIRV-Cross/archive/refs/tags/$SPIRV_CROSS.tar.gz" \
+		-o "freetype-$FREETYPE.tar.xz" "https://sourceforge.net/projects/freetype/files/freetype2/$FREETYPE/freetype-$FREETYPE.tar.xz/download" \
+		-O "https://github.com/libjpeg-turbo/libjpeg-turbo/releases/download/$LIBJPEGTURBO/libjpeg-turbo-$LIBJPEGTURBO.tar.gz" \
+		-O "https://downloads.sourceforge.net/project/libpng/libpng16/$LIBPNG/libpng-$LIBPNG.tar.xz" \
+		-O "https://storage.googleapis.com/downloads.webmproject.org/releases/webp/libwebp-$LIBWEBP.tar.gz" \
+		-O "https://github.com/facebook/zstd/releases/download/v$ZSTD/zstd-$ZSTD.tar.gz"
+fi
 shasum -a 256 --check SHASUMS
+if [ -n "$FETCHONLY" ]; then
+	exit 0
+fi
 
 # The NDK toolchain only searches inside CMAKE_FIND_ROOT_PATH, so the install directory goes
 # there as well as in CMAKE_PREFIX_PATH.
