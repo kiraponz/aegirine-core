@@ -133,7 +133,11 @@ if(ENABLE_OPENGL)
       )
     endif()
     if(ANDROID)
-      target_include_directories(util PRIVATE "${CMAKE_SOURCE_DIR}/android/app/src/cpp")
+      target_sources(util PRIVATE
+        opengl_context_egl_android.cpp
+        opengl_context_egl_android.h
+      )
+      target_link_libraries(util PRIVATE android)
     endif()
   endif()
 
@@ -252,7 +256,11 @@ elseif(APPLE)
   find_library(QUARTZCORE_LIBRARY QuartzCore)
   target_link_libraries(util PRIVATE ${METAL_LIBRARY} ${QUARTZCORE_LIBRARY} ${IOK_LIBRARY})
   set_source_files_properties(${MAC_SOURCES} PROPERTIES SKIP_PRECOMPILE_HEADERS TRUE)
-elseif(NOT ANDROID)
+elseif(ANDROID)
+  target_sources(util PRIVATE
+    platform_misc_android.cpp
+  )
+else()
   target_sources(util PRIVATE
     platform_misc_unix.cpp
   )

@@ -7141,6 +7141,80 @@ bool FullscreenUI::IsLeaderboardsWindowOpen()
   return (s_current_main_window == MainWindowType::Leaderboards);
 }
 
+#else
+
+// Android has its own UI; Big Picture mode is never started there.
+
+bool FullscreenUI::Initialize()
+{
+  return false;
+}
+
+bool FullscreenUI::IsInitialized()
+{
+  return false;
+}
+
+bool FullscreenUI::HasActiveWindow()
+{
+  return false;
+}
+
+void FullscreenUI::CheckForConfigChanges(const Settings& old_settings)
+{
+}
+
+void FullscreenUI::OnSystemStarted()
+{
+}
+
+void FullscreenUI::OnSystemPaused()
+{
+}
+
+void FullscreenUI::OnSystemResumed()
+{
+}
+
+void FullscreenUI::OnSystemDestroyed()
+{
+}
+
+void FullscreenUI::OnRunningGameChanged()
+{
+}
+
+void FullscreenUI::Shutdown()
+{
+}
+
+void FullscreenUI::Render()
+{
+}
+
+void FullscreenUI::InvalidateCoverCache()
+{
+}
+
+void FullscreenUI::TimeToPrintableString(SmallStringBase* str, time_t t)
+{
+}
+
+void ImGuiFullscreen::GetChoiceDialogHelpText(SmallStringBase& dest)
+{
+  dest.clear();
+}
+
+void ImGuiFullscreen::GetFileSelectorHelpText(SmallStringBase& dest)
+{
+  dest.clear();
+}
+
+void ImGuiFullscreen::GetInputDialogHelpText(SmallStringBase& dest)
+{
+  dest.clear();
+}
+
 #endif // __ANDROID__
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -87,6 +87,9 @@ float SettingInfo::FloatStepValue() const
 const MediaCaptureBackend Settings::DEFAULT_MEDIA_CAPTURE_BACKEND = MediaCaptureBackend::MediaFoundation;
 #elif !defined(__ANDROID__)
 const MediaCaptureBackend Settings::DEFAULT_MEDIA_CAPTURE_BACKEND = MediaCaptureBackend::FFmpeg;
+#else
+// No capture backends on Android; MaxCount stands for none.
+const MediaCaptureBackend Settings::DEFAULT_MEDIA_CAPTURE_BACKEND = MediaCaptureBackend::MaxCount;
 #endif
 
 Settings::Settings()
@@ -446,9 +449,6 @@ void Settings::Load(SettingsInterface& si, SettingsInterface& controller_si)
     si.GetIntValue("TextureReplacements", "DumpVRAMWriteHeightThreshold", 128);
 
 #ifdef __ANDROID__
-  // No expansion due to license incompatibility.
-  audio_expansion_mode = AudioExpansionMode::Disabled;
-
   // Android users are incredibly silly and don't understand that stretch is in the aspect ratio list...
   if (si.GetBoolValue("Display", "Stretch", false))
     display_aspect_ratio = DisplayAspectRatio::MatchWindow;

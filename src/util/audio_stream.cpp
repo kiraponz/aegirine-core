@@ -455,7 +455,9 @@ void AudioStream::BaseInitialize(SampleReader sample_reader)
   m_sample_reader = sample_reader;
 
   AllocateBuffer();
+#ifndef __ANDROID__
   ExpandAllocate();
+#endif
   StretchAllocate();
 }
 
@@ -473,8 +475,10 @@ void AudioStream::AllocateBuffer()
   m_staging_buffer = std::make_unique<s16[]>(CHUNK_SIZE * m_internal_channels);
   m_float_buffer = std::make_unique<float[]>(CHUNK_SIZE * m_internal_channels);
 
+#ifndef __ANDROID__
   if (IsExpansionEnabled())
     m_expand_buffer = std::make_unique<float[]>(m_parameters.expand_block_size * NUM_INPUT_CHANNELS);
+#endif
 
   DEV_LOG(
     "Allocated buffer of {} frames for buffer of {} ms [expansion {} (block size {}), stretch {}, target size {}].",
@@ -484,7 +488,9 @@ void AudioStream::AllocateBuffer()
 
 void AudioStream::DestroyBuffer()
 {
+#ifndef __ANDROID__
   m_expand_buffer.reset();
+#endif
   m_staging_buffer.reset();
   m_float_buffer.reset();
   m_buffer.reset();
@@ -609,13 +615,14 @@ static void FloatChunkToS16(s16* dst, const float* src, u32 num_samples)
   }
 }
 
+#ifndef __ANDROID__
+
 void AudioStream::ExpandAllocate()
 {
   DebugAssert(!m_expander);
   if (m_parameters.expansion_mode == AudioExpansionMode::Disabled)
     return;
 
-#ifndef __ANDROID__
   static constexpr std::array<std::pair<FreeSurroundDecoder::ChannelSetup, bool>,
                               static_cast<size_t>(AudioExpansionMode::Count)>
     channel_setup_mapping = {{
@@ -640,10 +647,9 @@ void AudioStream::ExpandAllocate()
   m_expander->SetRearSeparation(m_parameters.expand_rear_separation);
   m_expander->SetLowCutoff(static_cast<float>(m_parameters.expand_low_cutoff) / m_sample_rate * 2);
   m_expander->SetHighCutoff(static_cast<float>(m_parameters.expand_high_cutoff) / m_sample_rate * 2);
-#else
-  Panic("Attempting to use expansion on Android.");
-#endif
 }
+
+#endif
 
 void AudioStream::EndWrite(u32 num_frames)
 {

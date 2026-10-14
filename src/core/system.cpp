@@ -4057,7 +4057,7 @@ bool System::CheckForSBIFile(CDImage* image, Error* error)
     s_running_game_serial, s_running_game_title);
 #else
   // Shorter because no confirm messages.
-  Error::SetStringView(error, "Missing SBI file.", "The selected game requires a SBI file to run properly.");
+  Error::SetStringView(error, "The selected game requires a SBI file to run properly.");
 #endif
 
   return false;

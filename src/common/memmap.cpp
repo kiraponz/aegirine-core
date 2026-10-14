@@ -27,12 +27,15 @@
 #include <mach/mach_vm.h>
 #include <mach/vm_map.h>
 #include <sys/mman.h>
-#elif !defined(__ANDROID__)
+#else
 #include <cerrno>
 #include <dlfcn.h>
 #include <fcntl.h>
 #include <sys/mman.h>
 #include <unistd.h>
+#ifdef __ANDROID__
+#include <android/sharedmem.h>
+#endif
 #endif
 
 Log_SetChannel(MemMap);
@@ -598,7 +601,7 @@ void MemMap::EndCodeWrite()
 
 #endif
 
-#elif !defined(__ANDROID__)
+#else
 
 bool MemMap::MemProtect(void* baseaddr, size_t size, PageProtect mode)
 {
@@ -627,6 +630,18 @@ std::string MemMap::GetFileMappingName(const char* prefix)
 
 void* MemMap::CreateSharedMemory(const char* name, size_t size, Error* error)
 {
+#if defined(__ANDROID__)
+  // Bionic has no shm_open(), and memfd_create() only from API 30. Nothing else opens the
+  // mapping by name, so an ashmem region does the same job; it is already the right size.
+  const int fd = ASharedMemory_create(name, size);
+  if (fd < 0)
+  {
+    Error::SetErrno(error, "ASharedMemory_create() failed: ", errno);
+    return nullptr;
+  }
+
+  return reinterpret_cast<void*>(static_cast<intptr_t>(fd));
+#else
   const bool is_anonymous = (!name || *name == 0);
 #if defined(__linux__) || defined(__FreeBSD__)
   const int fd = is_anonymous ? memfd_create("", 0) : shm_open(name, O_CREAT | O_EXCL | O_RDWR, 0600);
@@ -671,6 +686,7 @@ void* MemMap::CreateSharedMemory(const char* name, size_t size, Error* error)
 #endif
 
   return reinterpret_cast<void*>(static_cast<intptr_t>(fd));
+#endif
 }
 
 void MemMap::DestroySharedMemory(void* ptr)
@@ -680,7 +696,9 @@ void MemMap::DestroySharedMemory(void* ptr)
 
 void MemMap::DeleteSharedMemory(const char* name)
 {
+#ifndef __ANDROID__
   shm_unlink(name);
+#endif
 }
 
 void* MemMap::MapSharedMemory(void* handle, size_t offset, void* baseaddr, size_t size, PageProtect mode)

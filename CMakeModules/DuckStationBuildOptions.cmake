@@ -2,7 +2,13 @@
 option(ENABLE_OPENGL "Build with OpenGL renderer" ON)
 option(ENABLE_VULKAN "Build with Vulkan renderer" ON)
 option(BUILD_NOGUI_FRONTEND "Build the NoGUI frontend" OFF)
-option(BUILD_QT_FRONTEND "Build the Qt frontend" ON)
+if(ANDROID)
+  # The frontend is Aegirine's :emucore, which passes its native sources in ANDROID_FRONTEND_DIR.
+  option(BUILD_QT_FRONTEND "Build the Qt frontend" OFF)
+  set(ANDROID_FRONTEND_DIR "" CACHE PATH "Directory of the Android frontend's CMakeLists.txt")
+else()
+  option(BUILD_QT_FRONTEND "Build the Qt frontend" ON)
+endif()
 option(BUILD_REGTEST "Build regression test runner" OFF)
 option(BUILD_TESTS "Build unit tests" OFF)
 

@@ -103,7 +103,7 @@ if(NOT WIN32 AND NOT ANDROID AND NOT APPLE)
 endif()
 
 if(ANDROID)
-  target_link_libraries(common PRIVATE log)
+  target_link_libraries(common PRIVATE log android)
 endif()
 
 if(LINUX)

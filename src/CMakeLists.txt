@@ -15,6 +15,10 @@ if(BUILD_QT_FRONTEND)
   add_subdirectory(duckstation-qt)
 endif()
 
+if(ANDROID AND ANDROID_FRONTEND_DIR)
+  add_subdirectory("${ANDROID_FRONTEND_DIR}" android-frontend)
+endif()
+
 if(BUILD_REGTEST)
   add_subdirectory(duckstation-regtest)
 endif()

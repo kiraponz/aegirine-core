@@ -9,19 +9,32 @@ endif()
 set(THREADS_PREFER_PTHREAD_FLAG ON)
 find_package(Threads REQUIRED)
 
-find_package(SDL2 2.30.6 REQUIRED)
+if(NOT ANDROID)
+  find_package(SDL2 2.30.6 REQUIRED)
+endif()
 find_package(Zstd 1.5.6 REQUIRED)
 find_package(WebP REQUIRED) # v1.4.0, spews an error on Linux because no pkg-config.
+if(ANDROID)
+  # Static libwebp also needs the libraries it was split into.
+  find_library(WEBP_SHARPYUV_LIBRARY sharpyuv REQUIRED)
+  find_library(WEBP_CPUFEATURES_LIBRARY cpufeatures-webp REQUIRED)
+  set_property(TARGET WebP::libwebp APPEND PROPERTY INTERFACE_LINK_LIBRARIES
+    "${WEBP_SHARPYUV_LIBRARY}" "${WEBP_CPUFEATURES_LIBRARY}")
+endif()
 find_package(ZLIB REQUIRED) # 1.3, but Mac currently doesn't use it.
 find_package(PNG 1.6.40 REQUIRED)
 find_package(JPEG REQUIRED)
 find_package(Freetype 2.13.2 REQUIRED) # 2.13.3, but flatpak is still on 2.13.2.
-find_package(lunasvg 2.4.1 REQUIRED)
+if(NOT ANDROID)
+  find_package(lunasvg 2.4.1 REQUIRED)
+endif()
 find_package(cpuinfo REQUIRED)
-find_package(DiscordRPC 3.4.0 REQUIRED)
+if(NOT ANDROID)
+  find_package(DiscordRPC 3.4.0 REQUIRED)
+endif()
 find_package(SoundTouch 2.3.3 REQUIRED)
 
-if(NOT WIN32)
+if(NOT WIN32 AND NOT ANDROID)
   find_package(CURL REQUIRED)
 endif()
 
@@ -57,7 +70,7 @@ if(LINUX)
   find_package(UDEV REQUIRED)
 endif()
 
-if(NOT WIN32 AND NOT APPLE)
+if(NOT WIN32 AND NOT APPLE AND NOT ANDROID)
   find_package(Libbacktrace REQUIRED)
 endif()
 

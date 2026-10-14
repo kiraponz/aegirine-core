@@ -2861,7 +2861,8 @@ MediaCapture::CodecList MediaCaptureFFmpeg::GetAudioCodecList(const char* contai
 
 } // namespace
 
-static constexpr const std::array s_backend_names = {
+// Sized explicitly: there are no backends on Android, and an empty list can't be deduced.
+static constexpr const std::array<const char*, static_cast<size_t>(MediaCaptureBackend::MaxCount)> s_backend_names = {
 #ifdef _WIN32
   "MediaFoundation",
 #endif
@@ -2869,7 +2870,7 @@ static constexpr const std::array s_backend_names = {
   "FFmpeg",
 #endif
 };
-static constexpr const std::array s_backend_display_names = {
+static constexpr const std::array<const char*, static_cast<size_t>(MediaCaptureBackend::MaxCount)> s_backend_display_names = {
 #ifdef _WIN32
   TRANSLATE_NOOP("MediaCapture", "Media Foundation"),
 #endif
