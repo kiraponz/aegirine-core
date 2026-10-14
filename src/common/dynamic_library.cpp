@@ -75,6 +75,10 @@ std::string DynamicLibrary::GetVersionedFilename(const char* libname, int major,
     return fmt::format("{}{}.{}.dylib", prefix, libname, major);
   else
     return fmt::format("{}{}.dylib", prefix, libname);
+#elif defined(__ANDROID__)
+  // An APK can only carry lib*.so, so the version never goes in the name.
+  const char* prefix = std::strncmp(libname, "lib", 3) ? "lib" : "";
+  return fmt::format("{}{}.so", prefix, libname);
 #else
   const char* prefix = std::strncmp(libname, "lib", 3) ? "lib" : "";
   if (major >= 0 && minor >= 0 && patch >= 0)

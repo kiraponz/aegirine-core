@@ -79,6 +79,9 @@ static_assert(sizeof(PSEXEHeader) == 0x800);
 
 std::optional<Image> LoadImageFromFile(const char* filename, Error* error);
 
+/// Looks up a 512KB image by its hash (as LoadImageFromFile computes it). Null for an unknown image.
+const ImageInfo* GetInfoForHash(const std::span<u8> image, const ImageInfo::Hash& hash);
+
 bool IsValidBIOSForRegion(ConsoleRegion console_region, ConsoleRegion bios_region);
 
 bool PatchBIOSFastBoot(u8* image, u32 image_size, ImageInfo::FastBootPatch type);

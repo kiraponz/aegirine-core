@@ -18,7 +18,6 @@
 Log_SetChannel(BIOS);
 
 namespace BIOS {
-static const ImageInfo* GetInfoForHash(const std::span<u8> image, const ImageInfo::Hash& hash);
 
 static constexpr ImageInfo::Hash MakeHashFromString(const char str[])
 {

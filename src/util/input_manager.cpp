@@ -2022,7 +2022,7 @@ void InputManager::UpdateInputSourceState(SettingsInterface& si, std::unique_loc
     else
     {
       std::unique_ptr<InputSource> source(factory_function());
-      if (!source->Initialize(si, settings_lock))
+      if (!source || !source->Initialize(si, settings_lock))
       {
         ERROR_LOG("Source '{}' failed to initialize.", InputManager::InputSourceToString(type));
         return;

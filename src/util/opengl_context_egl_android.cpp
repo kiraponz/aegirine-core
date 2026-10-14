@@ -38,9 +38,14 @@ std::unique_ptr<OpenGLContext> ContextEGLAndroid::CreateSharedContext(const Wind
 
 EGLDisplay ContextEGLAndroid::GetPlatformDisplay(Error* error)
 {
-  EGLDisplay dpy = TryGetPlatformDisplay(EGL_PLATFORM_ANDROID_KHR, "EGL_KHR_platform_android");
+  // Android has the one display. Going through eglGetPlatformDisplayEXT gives a display that
+  // eglInitialize refuses (EGL_BAD_DISPLAY).
+  EGLDisplay dpy = eglGetDisplay(EGL_DEFAULT_DISPLAY);
   if (dpy == EGL_NO_DISPLAY)
-    dpy = GetFallbackDisplay(error);
+  {
+    const EGLint err = eglGetError();
+    Error::SetStringFmt(error, "eglGetDisplay() failed: {} (0x{:X})", err, err);
+  }
 
   return dpy;
 }
